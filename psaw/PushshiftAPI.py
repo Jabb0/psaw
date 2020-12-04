@@ -68,7 +68,8 @@ class PushshiftAPIMinimal(object):
                  utc_offset_secs=None,
                  domain='api',
                  https_proxy=None,
-                 shards_down_behavior='warn' # must be one of ['warn','stop' or None] # To do: add 'retry'
+                 user_agent=None,
+                 shards_down_behavior='warn'  # must be one of ['warn','stop' or None] # To do: add 'retry'
                 ):
         assert max_results_per_request <= 1000
         assert backoff >= 1
@@ -77,6 +78,7 @@ class PushshiftAPIMinimal(object):
         self.max_sleep   = max_sleep
         self.backoff     = backoff
         self.max_results_per_request = max_results_per_request
+        self.headers = {"User-Agent": user_agent}
 
         self._utc_offset_secs = utc_offset_secs
         self._detect_local_tz = detect_local_tz
@@ -181,7 +183,7 @@ class PushshiftAPIMinimal(object):
             self._impose_rate_limit(i)
             i+=1
             try:
-                response = requests.get(url, params=payload, proxies=self.proxies)
+                response = requests.get(url, params=payload, proxies=self.proxies, headers=self.headers)
                 log.info(response.url)
                 log.debug('Response status code: %s' % response.status_code)
             except requests.ConnectionError:
@@ -358,12 +360,11 @@ class PushshiftAPI(PushshiftAPIMinimal):
         self.payload = copy.deepcopy(kwargs)
 
         client_return_batch = kwargs.get('return_batch')
-        if client_return_batch is False:
+        if client_return_batch is not None:
             self.payload.pop('return_batch')
 
         if 'filter' in kwargs:
             self.payload.pop('filter')
-
 
         gen = self._search(return_batch=True, filter='id', **self.payload)
         using_gsci = False
@@ -380,7 +381,7 @@ class PushshiftAPI(PushshiftAPIMinimal):
                 fullnames = [prefix + c.id for c in batch]
             praw_batch = self.r.info(fullnames=fullnames)
             if client_return_batch:
-                yield praw_batch
+                yield list(praw_batch)
             else:
                 for praw_thing in praw_batch:
                     yield praw_thing
